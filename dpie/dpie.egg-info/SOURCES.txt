@@ -1,7 +1,0 @@
-pyproject.toml
-dpie.egg-info/PKG-INFO
-dpie.egg-info/SOURCES.txt
-dpie.egg-info/dependency_links.txt
-dpie.egg-info/entry_points.txt
-dpie.egg-info/requires.txt
-dpie.egg-info/top_level.txt
