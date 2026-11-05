@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  dpie-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dpie_engine
+    ports:
+      - "8000:8000"
+    environment:
+      - DPIE_ENVIRONMENT=production
+      - DPIE_DEFAULT_MODE=deep
+      - DPIE_API_PORT=8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+    volumes:
+      - dpie_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  dpie_data:
+
