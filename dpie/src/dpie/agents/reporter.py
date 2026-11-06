@@ -8,20 +8,15 @@ Supports JSON and human-readable report formats.
 
 from __future__ import annotations
 
-import json
 import time
 import logging
-import importlib.util
-import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from dpie.schemas import (
     AgentType,
     AgentInput,
     AgentOutput,
     EvidenceRecord,
-    ReportContent,
-    ReportFormat,
 )
 from dpie.agents.base import BaseAgent
 

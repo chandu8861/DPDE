@@ -8,14 +8,11 @@ Maintains an auditable analysis history.
 
 from __future__ import annotations
 
-import asyncio
 import time
 import logging
-import importlib.util
-import os
 import json
 import hashlib
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from dpie.schemas import (
     AgentType,

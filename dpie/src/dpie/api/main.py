@@ -16,35 +16,28 @@ Essential endpoints:
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 import uvicorn
 
 from dpie.schemas import (
-    AnalysisRequest,
     AnalysisResponse,
     AgentInput,
-    AgentOutput,
     OrchestrationMode,
-    EvidenceRecord,
-    DarkPatternCategory,
     AgentType,
-    ReportFormat,
-    DetectionStatus,
 )
 from dpie.orchestration import (
     OrchestrationEngine,
-    run_fast_analysis,
-    run_deep_analysis,
-    run_full_analysis,
 )
-from dpie.knowledge_base import get_knowledge_base, SharedKnowledgeBase
-from dpie.agents.registry import get_agent_registry, init_agent_registry, AgentRegistry
+from dpie.knowledge_base import get_knowledge_base
+from dpie.agents.registry import get_agent_registry
 from dpie.config import settings, load_settings
+from dpie._version import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +84,15 @@ def _register_default_agents():
 # Register immediately so endpoints work without waiting for startup hooks
 _register_default_agents()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize/cleanup around app lifecycle (preferred over on_event)."""
+    _register_default_agents()
+    logger.info(f"DPIE API started successfully with {len(registry.list_agents())} registered agents")
+    yield
+
+
 # Create FastAPI app
 app = FastAPI(
     title="DPIE - DarkPattern Intelligence Engine",
@@ -98,9 +100,10 @@ app = FastAPI(
     Multi-Agent AI Framework for detecting, investigating, correlating, 
     classifying, and reporting deceptive user-interface practices and dark patterns.
     """,
-    version="0.1.0",
+    version=__version__,
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # Add CORS middleware
@@ -142,7 +145,7 @@ class AnalyzeRequest(BaseModel):
 class HealthCheck(BaseModel):
     """Response model for health check."""
     status: str = "ok"
-    version: str = "0.1.0"
+    version: str = __version__
     agents_available: int
     knowledge_base_entities: int
 
@@ -157,7 +160,7 @@ async def health_check():
     """Health check endpoint."""
     return HealthCheck(
         status="ok",
-        version="0.1.0",
+        version=__version__,
         agents_available=len(registry.list_agents()),
         knowledge_base_entities=len(kb._memory.get("evidence", {})),
     )
@@ -284,104 +287,11 @@ async def analyze_endpoint(request: AnalyzeRequest, background_tasks: Background
 @app.get("/dashboard", response_class=HTMLResponse, tags=["dashboard"])
 async def dashboard_view():
     """Interactive Developer Dashboard."""
-    return """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DPIE - DarkPattern Intelligence Engine Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
-        .card { background: #1e293b; border: 1px solid #334155; color: #f8fafc; }
-        .badge-dp { font-size: 0.85rem; padding: 0.35rem 0.65rem; border-radius: 9999px; }
-        pre { background: #090d16; padding: 1rem; border-radius: 0.5rem; color: #38bdf8; max-height: 400px; overflow-y: auto; }
-    </style>
-</head>
-<body class="p-4">
-    <div class="container-fluid">
-        <header class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom border-secondary">
-            <h2>🛡️ DPIE Dashboard <span class="badge bg-primary fs-6">v0.1.0</span></h2>
-            <a href="/docs" target="_blank" class="btn btn-outline-info btn-sm">Interactive Swagger Docs</a>
-        </header>
-
-        <div class="row g-4">
-            <div class="col-md-5">
-                <div class="card p-3 shadow">
-                    <h5 class="card-title text-info mb-3">Inspect & Analyze UI</h5>
-                    <div class="mb-3">
-                        <label class="form-label">Target URL</label>
-                        <input type="text" id="targetUrl" class="form-control bg-dark text-white border-secondary" value="https://example.com/checkout">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Analysis Mode</label>
-                        <select id="analysisMode" class="form-select bg-dark text-white border-secondary">
-                            <option value="fast">FAST (Triage)</option>
-                            <option value="deep" selected>DEEP (Triage + Investigator + Correlator)</option>
-                            <option value="full">FULL (All 11 Specialized Agents)</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">HTML / DOM Snippet</label>
-                        <textarea id="htmlSnippet" class="form-control bg-dark text-white border-secondary" rows="5"><button class="cta">Subscribe now - it's free and you must agree!</button>
-<a href="#" class="decline-link">No thanks, I prefer paying full price</a>
-<span class="fine-print">Auto-renews at $99/mo after 3 days trial. Cancel anytime with $25 fee.</span></textarea>
-                    </div>
-                    <button class="btn btn-primary w-100 py-2 fw-semibold" onclick="runAnalysis()">Run Intelligence Engine</button>
-                </div>
-            </div>
-
-            <div class="col-md-7">
-                <div class="card p-3 shadow">
-                    <h5 class="card-title text-success mb-3">Detection Results & Findings</h5>
-                    <div id="resultsSummary" class="mb-3 text-muted">Run analysis to see detected dark patterns, confidence scores, and compliance analysis.</div>
-                    <pre id="resultsOutput">Ready.</pre>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        async function runAnalysis() {
-            const url = document.getElementById('targetUrl').value;
-            const mode = document.getElementById('analysisMode').value;
-            const html = document.getElementById('htmlSnippet').value;
-            const out = document.getElementById('resultsOutput');
-            const summary = document.getElementById('resultsSummary');
-
-            out.textContent = 'Running analysis...';
-            try {
-                const res = await fetch('/api/v1/analyze', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        url: url,
-                        html: html,
-                        mode: mode,
-                        elements: [
-                            { element_type: 'button', element_text: "Subscribe now - it's free and you must agree!", element_selector: '.cta' },
-                            { element_type: 'a', element_text: "No thanks, I prefer paying full price", element_selector: '.decline-link' },
-                            { element_type: 'span', element_text: "Auto-renews at $99/mo after 3 days trial. Cancel anytime with $25 fee.", element_selector: '.fine-print' }
-                        ]
-                    })
-                });
-                const data = await res.json();
-                out.textContent = JSON.stringify(data, null, 2);
-                summary.innerHTML = `<span class="badge bg-danger badge-dp">${data.all_findings ? data.all_findings.length : 0} Findings</span> Confidence: <strong>${Math.round((data.aggregated_confidence || 0) * 100)}%</strong> | Risk: <strong>${Math.round((data.aggregated_risk || 0) * 100)}%</strong>`;
-            } catch (err) {
-                out.textContent = 'Error: ' + err.message;
-            }
-        }
-    </script>
-</body>
-</html>"""
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize the API on startup."""
-    _register_default_agents()
-    logger.info(f"DPIE API started successfully with {len(registry.list_agents())} registered agents")
+    try:
+        from dpie.dashboard_ui import get_dashboard_html
+        return get_dashboard_html()
+    except Exception:
+        return "<html><body><h3>DPIE Dashboard</h3><p>Dashboard UI module unavailable. Use <a href='/docs'>/docs</a>.</p></body></html>"
 
 
 def run_api(host: str = settings.api_host, port: int = settings.api_port):

@@ -17,24 +17,22 @@ relying on unstructured chat messages.
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
-import hashlib
-from typing import Any, Dict, List, Optional, Set, Tuple
+import threading
+from typing import Any, Dict, List, Optional
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Import schema classes - requires dpie package to be installed
 from dpie.schemas import (
-    AgentType,
-    AgentOutput,
     EvidenceRecord,
     DarkPatternCategory,
-    DarkPatternKnowledgeBase,
-    AgentInput,
-    OrchestrationMode,
-    DetectionStatus,
 )
+
+try:
+    from dpie.config import settings as _settings
+except Exception:  # pragma: no cover
+    _settings = None
 
 
 # ---------------------------------------------------------------------------
@@ -50,7 +48,7 @@ class SharedKnowledgeBase:
     
     def __init__(self, db_path: Optional[str] = None):
         """Initialize the knowledge base.
-        
+
         Args:
             db_path: Path to SQLite database. If None, uses in-memory.
         """
@@ -62,17 +60,40 @@ class SharedKnowledgeBase:
             "agent_execution_log": [],  # List of agent execution records
             "agent_findings_index": {},  # element_id -> [evidence_ids]
         }
-        
+        self._lock = threading.RLock()
+        self._max_evidence = int(getattr(_settings, "kb_max_evidence", 5000) or 0) if _settings else 5000
+        self._max_history = int(getattr(_settings, "kb_max_history", 2000) or 0) if _settings else 2000
+
         # Initialize SQLite if path provided
         self._db_path = db_path
         self._db_connection: Optional[sqlite3.Connection] = None
-        
+
         if db_path:
             self._db_connection = sqlite3.connect(db_path, check_same_thread=False)
             self._db_connection.execute(
                 "PRAGMA journal_mode=WAL"
             )
             self._initialize_tables()
+
+    def _trim_bounds(self) -> None:
+        # Call with lock held when mutating.
+        if self._max_evidence and len(self._memory["evidence"]) > self._max_evidence:
+            # Drop oldest by insertion order (Python 3.7+ dict order).
+            overflow = len(self._memory["evidence"]) - self._max_evidence
+            for k in list(self._memory["evidence"].keys())[:overflow]:
+                self._memory["evidence"].pop(k, None)
+            # Rebuild element index
+            idx: Dict[str, List[str]] = {}
+            for eid, ev in self._memory["evidence"].items():
+                el = ev.get("source_element_id")
+                if el:
+                    idx.setdefault(el, []).append(eid)
+            self._memory["agent_findings_index"] = idx
+        if self._max_history:
+            for key in ("investigation_history", "agent_execution_log"):
+                seq = self._memory.get(key) or []
+                if len(seq) > self._max_history:
+                    self._memory[key] = seq[-self._max_history:]
     
     def _initialize_tables(self):
         """Initialize SQLite tables."""
@@ -212,37 +233,51 @@ class SharedKnowledgeBase:
                 severity_weight=cat["severity_weight"],
             )
     
-    # -------------------------------------------------------------------
-    # Evidence Management
-    # -------------------------------------------------------------------
-    
+    def add_findings_to_kb(self, findings: List[Any]) -> int:
+        """Compatibility helper to store findings (batched DB commit when SQLite)."""
+        count = 0
+        items = list(findings or [])
+        if not items:
+            return 0
+        with self._lock:
+            for f in items:
+                try:
+                    self._store_evidence_inner(f, commit=False)
+                    count += 1
+                except Exception:
+                    continue
+            if self._db_connection:
+                try:
+                    self._db_connection.commit()
+                except Exception:
+                    pass
+            self._trim_bounds()
+        return count
+
     def store_evidence(self, evidence: Any) -> str:
-        """Store an evidence record.
-        
-        Args:
-            evidence: EvidenceRecord to store
-            
-        Returns:
-            The evidence ID (UUID)
-        """
+        with self._lock:
+            return self._store_evidence_inner(evidence, commit=True)
+
+    def _store_evidence_inner(self, evidence: Any, commit: bool = True) -> str:
+        """Store an evidence record (lock must be held by caller or via public API)."""
         # Generate ID if missing
         if not hasattr(evidence, 'evidence_id') or not evidence.evidence_id:
             import hashlib
             evidence_id = hashlib.sha256(
-                f"{evidence.source_agent}_{datetime.utcnow()}".encode()
+                f"{evidence.source_agent}_{datetime.utcnow()}_{id(evidence)}".encode()
             ).hexdigest()[:16]
             # Make a copy with the ID
             evidence = evidence.model_copy(update={"evidence_id": evidence_id}) if hasattr(evidence, 'model_copy') else evidence
-        
+
         evidence_id = evidence.evidence_id
-        
+
         # Store in memory
         self._memory["evidence"][evidence_id] = evidence.model_dump() if hasattr(evidence, 'model_dump') else dict(evidence)
-        
+
         # Store in SQLite if available
         if self._db_connection:
             self._db_connection.execute(
-                """INSERT OR REPLACE INTO evidence 
+                """INSERT OR REPLACE INTO evidence
                    (evidence_id, source_agent, source_element_id, source_url,
                     element_type, element_selector, element_text, element_attributes,
                     detected_pattern, detected_subcategory, confidence_score, evidence_text,
@@ -276,22 +311,25 @@ class SharedKnowledgeBase:
                     "updated_at": evidence.updated_at.isoformat(),
                 },
             )
-            self._db_connection.commit()
-        
+            if commit:
+                self._db_connection.commit()
+
         # Index by element for quick lookup
         if evidence.source_element_id:
             if evidence.source_element_id not in self._memory["agent_findings_index"]:
                 self._memory["agent_findings_index"][evidence.source_element_id] = []
             self._memory["agent_findings_index"][evidence.source_element_id].append(evidence_id)
-        
+        if commit:
+            self._trim_bounds()
+
         return evidence_id
     
     def retrieve_evidence(self, evidence_id: str) -> Optional[Any]:
         """Retrieve an evidence record by ID.
-        
+
         Args:
             evidence_id: The evidence record ID
-            
+
         Returns:
             EvidenceRecord or None
         """
@@ -299,7 +337,7 @@ class SharedKnowledgeBase:
         if evidence_id in self._memory["evidence"]:
             data = self._memory["evidence"][evidence_id]
             return EvidenceRecord(**data)
-        
+
         # Check SQLite
         if self._db_connection:
             row = self._db_connection.execute(
@@ -328,8 +366,12 @@ class SharedKnowledgeBase:
                     created_at=datetime.fromisoformat(row[18]) if row[18] else datetime.utcnow(),
                     updated_at=datetime.fromisoformat(row[19]) if row[19] else datetime.utcnow(),
                 )
-        
+
         return None
+
+    def get_evidence(self, evidence_id: str) -> Optional[Any]:
+        """Compatibility alias for retrieve_evidence."""
+        return self.retrieve_evidence(evidence_id)
     
     def update_evidence(self, evidence: Any) -> bool:
         """Update an existing evidence record.
@@ -625,12 +667,14 @@ class SharedKnowledgeBase:
             "created_at": datetime.utcnow().isoformat(),
         }
         
-        self._memory["agent_execution_log"].append(log_entry)
-        
+        with self._lock:
+            self._memory["agent_execution_log"].append(log_entry)
+            self._trim_bounds()
+
         # Store in SQLite
         if self._db_connection:
             self._db_connection.execute(
-                """INSERT INTO agent_execution_log 
+                """INSERT INTO agent_execution_log
                    (agent_type, request_id, status, execution_time_ms, findings_count,
                     model_used, tokens_consumed, created_at)
                    VALUES (:agent_type, :request_id, :status, :execution_time_ms,

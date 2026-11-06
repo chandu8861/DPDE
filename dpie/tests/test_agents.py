@@ -12,14 +12,11 @@ _src = str(Path(__file__).parent.parent / "src")
 if _src not in sys.path:
     sys.path.insert(0, _src)
 
-from dpie.schemas import (
+from dpie.schemas import (  # noqa: E402
     AgentType,
     AgentInput,
-    AgentOutput,
-    EvidenceRecord,
-    AgentStatus,
 )
-from dpie.agents import (
+from dpie.agents import (  # noqa: E402
     TriageAgent,
     InvestigatorAgent,
     CorrelatorAgent,

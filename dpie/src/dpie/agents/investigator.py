@@ -9,11 +9,8 @@ Distinguishes legitimate design choices from potentially manipulative practices.
 
 from __future__ import annotations
 
-import asyncio
 import time
 import logging
-import importlib.util
-import os
 from typing import Any, Dict, List, Optional
 
 from dpie.schemas import (
@@ -21,9 +18,6 @@ from dpie.schemas import (
     AgentInput,
     AgentOutput,
     EvidenceRecord,
-    DarkPatternCategory,
-    OrchestrationMode,
-    DetectionStatus,
 )
 from dpie.agents.base import BaseAgent
 

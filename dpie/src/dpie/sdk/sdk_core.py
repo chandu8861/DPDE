@@ -7,41 +7,32 @@ This is the main entry point for developers using the DPIE Python SDK.
 
 from __future__ import annotations
 
-import json
 import asyncio
+import logging
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from dpie.schemas import (
     AgentInput,
-    AgentOutput,
-    AnalysisRequest,
-    AnalysisResponse,
     OrchestrationMode,
-    EvidenceRecord,
-    DarkPatternCategory,
     AgentType,
     ReportFormat,
     DetectionStatus,
+    EvidenceRecord,
 )
 from dpie.orchestration import (
     OrchestrationEngine,
-    run_fast_analysis,
-    run_deep_analysis,
-    run_full_analysis,
 )
-from dpie.providers import ProviderFactory, ProviderWrapper, OpenAIProvider
+from dpie.providers import ProviderFactory, ProviderWrapper
 from dpie.knowledge_base import get_knowledge_base
 from dpie.config import settings, load_settings
 from dpie.agents import (
-    TriageAgent,
-    InvestigatorAgent,
-    CorrelatorAgent,
-    ReporterAgent,
     get_agent_registry,
-    AgentRegistry,
+    init_agent_registry,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -136,9 +127,7 @@ class AnalysisResult(BaseModel):
         default=None, description="Generated report (if include_report=True)"
     )
     
-    class Config:
-        """Pydantic config."""
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 # ---------------------------------------------------------------------------
@@ -198,19 +187,22 @@ class DarkPatternEngine:
         
         self.engine = OrchestrationEngine(mode=self.mode)
         
-        # Set up LLM provider
-        self._provider = self._initialize_provider(
-            provider, model or settings.default_provider
-        )
+        # Set up LLM provider (optional; heuristic analysis works without keys)
+        try:
+            self._provider = self._initialize_provider(
+                provider, model or settings.default_provider
+            )
+        except Exception as e:
+            logger.info("LLM provider not initialized (%s); continuing with heuristic-only mode", e)
+            self._provider = None
         
         # Set up knowledge base
         self.kb = knowledge_base or get_knowledge_base()
         
         # Initialize agent registry
-        from dpie.agents.registry import init_agent_registry, get_agent_registry
         init_agent_registry()
         self.registry = get_agent_registry()
-        
+
         # Ensure default agents are registered
         self._ensure_agents_initialized()
     
@@ -226,7 +218,6 @@ class DarkPatternEngine:
         Returns:
             ProviderWrapper instance
         """
-        from dpie.providers import ProviderFactory
         
         # Create base provider
         try:
@@ -268,33 +259,33 @@ class DarkPatternEngine:
         input_data: AgentInput,
     ) -> AnalysisResult:
         """Run analysis with the current engine configuration.
-        
+
         Args:
             input_data: AgentInput with analysis request data
-            
+
         Returns:
             AnalysisResult with all findings and metadata
         """
-        # Execute analysis based on mode
+        # Execute analysis based on mode (use engine async methods directly)
         if self.mode == OrchestrationMode.FAST:
-            response = await run_fast_analysis(input_data, self.engine)
+            response = await self.engine.execute_fast_mode(input_data)
         elif self.mode == OrchestrationMode.DEEP:
-            response = await run_deep_analysis(input_data, self.engine)
+            response = await self.engine.execute_deep_mode(input_data)
         else:
-            response = await run_full_analysis(input_data, self.engine)
-        
+            response = await self.engine.execute_full_mode(input_data)
+
         # Convert to AnalysisResult
         result = AnalysisResult(
             request_id=response.request_id,
             status=response.status,
-            triage=response.triage.model_dump() if response.triage else None,
-            investigator=response.investigator.model_dump() if response.investigator else None,
-            correlator=response.correlator.model_dump() if response.correlator else None,
-            reporter=response.reporter.model_dump() if response.reporter else None,
-            threat_hunter=getattr(response, 'threat_hunter', None),
-            forensics=getattr(response, 'forensics', None),
-            compliance=getattr(response, 'compliance', None),
-            all_findings=[f.model_dump() for f in response.all_findings],
+            triage=response.triage.model_dump() if hasattr(response.triage, "model_dump") and response.triage else (response.triage or None),
+            investigator=response.investigator.model_dump() if hasattr(response.investigator, "model_dump") and response.investigator else (response.investigator or None),
+            correlator=response.correlator.model_dump() if hasattr(response.correlator, "model_dump") and response.correlator else (response.correlator or None),
+            reporter=response.reporter.model_dump() if hasattr(response.reporter, "model_dump") and response.reporter else (response.reporter or None),
+            threat_hunter=getattr(response, "threat_hunter", None),
+            forensics=getattr(response, "forensics", None),
+            compliance=getattr(response, "compliance", None),
+            all_findings=[f.model_dump() if hasattr(f, "model_dump") else f for f in (response.all_findings or [])],
             aggregated_confidence=response.aggregated_confidence,
             aggregated_risk=response.aggregated_risk,
             execution_summary=response.execution_summary,
@@ -302,27 +293,26 @@ class DarkPatternEngine:
             models_used=response.models_used or [],
             tokens_total=response.tokens_total,
         )
-        
+
         # Generate report if needed
-        if hasattr(response, 'reporter') and response.reporter:
-            # Simple report generation
+        if getattr(response, "reporter", None):
             result.report = {
                 "format": "summary",
-                "pattern_name": "detected_patterns" if response.aggregated_confidence > 0.3 else "no_patterns_detected",
-                "severity": "medium" if response.aggregated_confidence > 0.3 else "low",
+                "pattern_name": "detected_patterns" if (response.aggregated_confidence or 0) > 0.3 else "no_patterns_detected",
+                "severity": "medium" if (response.aggregated_confidence or 0) > 0.3 else "low",
                 "confidence": response.aggregated_confidence,
                 "risk": response.aggregated_risk,
-                "evidence_count": len(response.all_findings),
+                "evidence_count": len(response.all_findings or []),
                 "findings_summary": [
                     {
-                        "pattern": f.detected_pattern or "unknown",
-                        "confidence": f.confidence_score,
-                        "description": f.evidence_text[:100] if f.evidence_text else ""
+                        "pattern": getattr(f, "detected_pattern", None) or (f.get("detected_pattern") if isinstance(f, dict) else "unknown"),
+                        "confidence": getattr(f, "confidence_score", None) if not isinstance(f, dict) else f.get("confidence_score"),
+                        "description": (getattr(f, "evidence_text", "") or (f.get("evidence_text", "") if isinstance(f, dict) else ""))[:100],
                     }
-                    for f in response.all_findings[:5]  # Top 5
+                    for f in (response.all_findings or [])[:5]
                 ],
             }
-        
+
         return result
     
     def analyze(
@@ -361,21 +351,24 @@ class DarkPatternEngine:
         # Convert dict to AgentInput if needed
         if isinstance(input_data, dict):
             # Build AgentInput from dict
-            agent_input = AgentInput(
-                url=input_data.get("url"),
-                html=input_data.get("html"),
-                dom_data=input_data.get("dom_data"),
-                elements=input_data.get("elements"),
-                mode=config.mode if config else self.mode,
-            )
+            data = dict(input_data)
+            for k in ("mode", "config"):
+                data.pop(k, None)
+            agent_input = AgentInput(**data)
+            if config and getattr(config, "mode", None):
+                self.set_mode(config.mode.value if hasattr(config.mode, "value") else str(config.mode))
         else:
             agent_input = input_data
         
-        # Run analysis
-        result = asyncio.get_event_loop().run_until_complete(
-            self._analyze_single(agent_input)
-        )
-        
+        # Run analysis (sync API)
+        try:
+            asyncio.get_running_loop()
+            raise RuntimeError("DarkPatternEngine.analyze() cannot be called from an async context; use `await engine._analyze_single(AgentInput(...))` or run in a thread.")
+        except RuntimeError as e:
+            if "cannot be called" in str(e):
+                raise
+        result = asyncio.run(self._analyze_single(agent_input))
+
         return result
     
     def set_mode(self, mode: str) -> None:
@@ -391,16 +384,19 @@ class DarkPatternEngine:
     
     def get_status(self) -> Dict[str, Any]:
         """Get engine status and statistics.
-        
+
         Returns:
             Dictionary with engine information
         """
+        agents = self.registry.list_agents() if hasattr(self.registry, "list_agents") else []
+        enabled = [a for a in agents if self.registry.is_agent_enabled(a.agent_type)]
+        evidence = getattr(self.kb, "_memory", {}).get("evidence", {}) if self.kb else {}
         return {
             "mode": self.mode.value,
-            "agents_registered": len(self.registry.get_all_agents()),
-            "agents_enabled": len(self.registry.get_enabled_agents()),
-            "knowledge_base_entities": len(self.kb._memory["evidence"]),
-            "total_execution_count": self.engine._execution_count if hasattr(self.engine, '_execution_count') else 0,
+            "agents_registered": len(agents),
+            "agents_enabled": len(enabled),
+            "knowledge_base_entities": len(evidence),
+            "total_execution_count": getattr(self.engine, "_execution_count", 0),
         }
     
     def get_findings_summary(self, result: AnalysisResult) -> Dict[str, Any]:
@@ -458,7 +454,6 @@ def set_api_key(provider: str, api_key: str) -> None:
         provider: Provider name ("openai", "anthropic", "google_gemini", "ollama")
         api_key: The API key value
     """
-    from dpie.providers import ProviderWrapper
     
     # Create provider and store in settings
     if provider == "openai":
@@ -470,7 +465,7 @@ def set_api_key(provider: str, api_key: str) -> None:
     elif provider == "ollama":
         settings.ollama_base_url = api_key  # For ollama, this might be a base URL
     
-    logger = __import__("logging").getLogger(__name__)
+    logger = logging.getLogger(__name__)
     logger.info(f"API key set for provider: {provider}")
 
 
@@ -483,7 +478,7 @@ def get_provider(provider: Optional[str] = None) -> ProviderWrapper:
     Returns:
         ProviderWrapper instance
     """
-    from dpie.providers import ProviderFactory, ProviderWrapper
+    from dpie.providers import ProviderWrapper
     
     provider_name = provider or settings.default_provider
     base_provider = ProviderFactory.create_provider(provider_name)
@@ -496,7 +491,6 @@ def list_providers() -> Dict[str, bool]:
     Returns:
         Dict mapping provider names to availability status
     """
-    from dpie.providers import ProviderFactory
     
     return ProviderFactory.get_provider_names_with_keys(
         openai_key=settings.openai_api_key,
@@ -504,28 +498,6 @@ def list_providers() -> Dict[str, bool]:
         google_key=settings.google_api_key,
     )
 
-
-# ---------------------------------------------------------------------------
-# Module logger
-# -------------------------------------------------------------------------
-
-import logging
-logger = logging.getLogger(__name__)
-
-# Console handler for SDK
-handler = logging.StreamHandler()
-handler.setLevel(logging.INFO)
-formatter = logging.Formatter(
-    "%(asctime)s - DPIE-SDK - %(levelname)s - %(message)s"
-)
-handler.setFormatter(formatter)
-logger.setLevel(logging.INFO)
-logger.addHandler(handler)
-
-
-# ---------------------------------------------------------------------------
-# Export
-# -------------------------------------------------------------------------
 
 __all__ = [
     "DarkPatternEngine",

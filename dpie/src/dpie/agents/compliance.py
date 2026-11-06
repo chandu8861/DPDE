@@ -8,12 +8,9 @@ Never automatically declares legal violations based solely on AI predictions.
 
 from __future__ import annotations
 
-import asyncio
 import time
 import logging
-import importlib.util
-import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from dpie.schemas import (
     AgentType,
@@ -55,7 +52,6 @@ class ComplianceAgent(BaseAgent):
         # Get previous findings
         previous_findings = input_data.previous_findings or []
         url = input_data.url or "unknown"
-        elements = input_data.elements or []
 
         # Get configuration for jurisdiction-specific rules
         configuration = input_data.configuration or {}

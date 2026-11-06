@@ -8,12 +8,9 @@ _src = str(Path(__file__).parent.parent / "src")
 if _src not in sys.path:
     sys.path.insert(0, _src)
 
-from dpie.schemas import AgentInput, OrchestrationMode
-from dpie.orchestration import (
+from dpie.schemas import AgentInput, OrchestrationMode  # noqa: E402
+from dpie.orchestration import (  # noqa: E402
     OrchestrationEngine,
-    run_fast_analysis,
-    run_deep_analysis,
-    run_full_analysis,
 )
 
 
@@ -36,7 +33,7 @@ async def test_fast_mode():
     resp = await engine.execute(TEST_INPUT)
     assert resp.status in ("completed", "triage_only")
     assert resp.aggregated_confidence is not None
-    print(f"✅ Fast Mode: OK (findings={len(resp.all_findings)}, time={resp.total_execution_time_ms}ms)")
+    print(f"[OK] Fast Mode: findings={len(resp.all_findings)}, time={resp.total_execution_time_ms}ms")
 
 
 async def test_deep_mode():
@@ -44,14 +41,14 @@ async def test_deep_mode():
     resp = await engine.execute(TEST_INPUT)
     assert resp.status == "completed"
     assert len(resp.all_findings) > 0
-    print(f"✅ Deep Mode: OK (findings={len(resp.all_findings)}, time={resp.total_execution_time_ms}ms)")
+    print(f"[OK] Deep Mode: findings={len(resp.all_findings)}, time={resp.total_execution_time_ms}ms")
 
 
 async def test_full_mode():
     engine = OrchestrationEngine(orchestration_mode=OrchestrationMode.FULL)
     resp = await engine.execute(TEST_INPUT)
     assert resp.status == "completed"
-    print(f"✅ Full Mode: OK (findings={len(resp.all_findings)}, time={resp.total_execution_time_ms}ms)")
+    print(f"[OK] Full Mode: findings={len(resp.all_findings)}, time={resp.total_execution_time_ms}ms")
 
 
 async def run_all():

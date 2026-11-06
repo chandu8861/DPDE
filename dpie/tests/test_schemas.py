@@ -1,22 +1,33 @@
-"""Unit tests for DPIE Schemas"""
-
 import sys
 from pathlib import Path
 
-_src = str(Path(__file__).parent.parent / "src")
+_src = str(Path(__file__).resolve().parent.parent / "src")
 if _src not in sys.path:
     sys.path.insert(0, _src)
 
-from dpie.schemas import (
+try:
+    import pytest  # type: ignore
+except Exception:  # pragma: no cover
+    class _PytestShim:
+        class _Raises:
+            def __init__(self, exc):
+                self.exc = exc
+            def __enter__(self):
+                return self
+            def __exit__(self, exc_type, exc, tb):
+                return exc_type is not None and issubclass(exc_type, self.exc)
+        @staticmethod
+        def raises(exc):
+            return _PytestShim._Raises(exc)
+    pytest = _PytestShim()  # type: ignore
+
+from dpie.schemas import (  # noqa: E402
     AgentType,
     AgentStatus,
     OrchestrationMode,
-    DetectionStatus,
     EvidenceRecord,
     AgentInput,
     AgentOutput,
-    AnalysisRequest,
-    AnalysisResponse,
 )
 
 

@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from dpie.agents.registry import AgentRegistry
 
 from dpie.schemas import (
     AgentType,
+    AgentStatus,
     AgentOutput,
-    EvidenceRecord,
     AgentInput,
     OrchestrationMode,
     DetectionStatus,
@@ -150,7 +153,7 @@ class BaseAgent:
 # Agent Registry
 # ---------------------------------------------------------------------------
 
-from dpie.agents.registry import (
+from dpie.agents.registry import (  # noqa: E402
     AgentRegistry,
     get_agent_registry,
     init_agent_registry,

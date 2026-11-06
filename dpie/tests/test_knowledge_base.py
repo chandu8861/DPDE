@@ -8,8 +8,8 @@ _src = str(Path(__file__).parent.parent / "src")
 if _src not in sys.path:
     sys.path.insert(0, _src)
 
-from dpie.schemas import AgentType, EvidenceRecord
-from dpie.knowledge_base import SharedKnowledgeBase
+from dpie.schemas import AgentType, EvidenceRecord  # noqa: E402
+from dpie.knowledge_base import SharedKnowledgeBase  # noqa: E402
 
 
 def test_in_memory_kb():
@@ -25,7 +25,8 @@ def test_in_memory_kb():
 
     retrieved = kb.get_evidence(ev_id)
     assert retrieved is not None
-    assert retrieved["detected_pattern"] == "forced_action"
+    pattern = retrieved.get("detected_pattern") if hasattr(retrieved, "get") else retrieved["detected_pattern"]
+    assert pattern == "forced_action"
 
 
 def test_sqlite_persistence():
@@ -48,8 +49,9 @@ def test_sqlite_persistence():
         kb2 = SharedKnowledgeBase(db_path=db_path)
         retrieved = kb2.get_evidence(ev_id)
         assert retrieved is not None
-        assert retrieved["detected_pattern"] == "sneaking"
-        print("✅ SQLite Persistence test passed!")
+        pattern = retrieved.get("detected_pattern") if hasattr(retrieved, "get") else retrieved["detected_pattern"]
+        assert pattern == "sneaking"
+        print("OK: SQLite Persistence test passed!")
     finally:
         import os
         if os.path.exists(db_path):

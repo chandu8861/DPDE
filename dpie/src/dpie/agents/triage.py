@@ -8,21 +8,15 @@ Minimizes unnecessary LLM calls.
 
 from __future__ import annotations
 
-import asyncio
 import time
 import logging
-import importlib.util
-import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from dpie.schemas import (
     AgentType,
     AgentInput,
     AgentOutput,
     EvidenceRecord,
-    DarkPatternCategory,
-    OrchestrationMode,
-    DetectionStatus,
 )
 from dpie.agents.base import BaseAgent
 
@@ -60,8 +54,6 @@ class TriageAgent(BaseAgent):
 
         # Extract data from input_data object
         elements = input_data.elements or []
-        html = input_data.html or ""
-        dom_data = input_data.dom_data or {}
         url = input_data.url or ""
 
         findings: List[EvidenceRecord] = []

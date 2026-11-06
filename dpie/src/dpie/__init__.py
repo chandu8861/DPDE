@@ -5,7 +5,7 @@ correlating, classifying, and reporting deceptive user-interface practices
 and dark patterns.
 """
 
-__version__ = "0.1.0"
+from dpie._version import __version__
 
 from dpie.schemas import (
     AgentType,

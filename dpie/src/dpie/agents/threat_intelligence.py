@@ -8,11 +8,8 @@ Distinguishes verified intelligence from model-generated hypotheses.
 
 from __future__ import annotations
 
-import asyncio
 import time
 import logging
-import importlib.util
-import os
 from typing import Any, Dict, List, Optional
 
 from dpie.schemas import (
@@ -289,7 +286,7 @@ class ThreatIntelligenceAgent(BaseAgent):
         """Analyze an element for known dark pattern indicators."""
         element_text_lower = element_text.lower()
 
-        known_patterns = self._load_known_patterns()
+        self._load_known_patterns()
 
         # Check for forced action indicators
         if any(kw in element_text_lower for kw in ["must", "required", "need", "have to"]):
@@ -350,7 +347,7 @@ class ThreatIntelligenceAgent(BaseAgent):
         verified_count = sum(1 for f in findings if f.metadata and f.metadata.get("is_verified"))
         hypothesis_count = len(findings) - verified_count
 
-        parts = [f"Compared findings against threat intelligence database"]
+        parts = ["Compared findings against threat intelligence database"]
         if verified_count:
             parts.append(f"{verified_count} verified intelligence match(es)")
         if hypothesis_count:

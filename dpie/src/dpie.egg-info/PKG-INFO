@@ -1,0 +1,283 @@
+Metadata-Version: 2.4
+Name: dpie
+Version: 0.1.0
+Summary: DarkPattern Intelligence Engine - Multi-Agent AI Framework
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.100.0
+Requires-Dist: pydantic>=2.5.0
+Requires-Dist: httpx>=0.25.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: uvicorn>=0.23.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Provides-Extra: dashboard
+Requires-Dist: jinja2>=3.1.0; extra == "dashboard"
+
+# DPIE - DarkPattern Intelligence Engine
+
+## Project Overview
+
+DPIE is a modular, reusable Multi-Agent AI Framework for detecting, investigating,
+correlating, classifying, and reporting deceptive user-interface practices and dark
+patterns. It is an **independent software product**, not built specifically for any
+existing browser extension or website.
+
+### Project Vision
+
+To create a specialized AI intelligence engine capable of detecting deceptive UI
+patterns, with a modular architecture that enables use by browser extensions, web
+applications, security platforms, UX auditing tools, research systems, and external
+developers.
+
+## Project Structure
+
+```
+dpie/
+├── __init__.py                          # Package init, version 0.1.0
+├── pyproject.toml                       # Package configuration
+├── dpie.egg-info/                     # pip installation metadata
+│
+├── src/                               # Core source module
+│   ├── __init__.py                      # Package init with re-exports
+│   ├── config.py                        # Configuration management
+│   ├── schemas.py                       # Pydantic models (ALL TESTS PASS)
+│   ├── providers.py                     # LLM Provider Abstraction Layer
+│   ├── knowledge_base.py                # Shared KB with SQLite backing
+│   ├── orchestration.py                 # Phase 4: Orchestration Engine
+│   └── agents/                          # Phase 2+: Specialized Agents
+│       ├── __init__.py                  # Agent exports (11 agents)
+│       ├── base.py                      # BaseAgent + Registry
+│       ├── triage.py                    # Fast initial analysis
+│       ├── investigator.py              # Detailed DOM analysis
+│       ├── correlator.py                # Finding combination + risk scoring
+│       ├── reporter.py                  # JSON/human-readable reports
+│       ├── threat_hunter.py             # Subtle pattern detection
+│       ├── forensics.py                 # Evidence preservation
+│       ├── threat_intelligence.py       # Known pattern verification
+│       ├── compliance.py                # Regulation mappings
+│       ├── responder.py                 # Remediation recommendations
+│       ├── auto_responder.py            # Workflow coordination
+│       └── mitre_analyst.py             # MITRE ATT&CK mappings
+│
+├── sdk/                               # Python SDK
+│   ├── __init__.py                      # SDK init
+│   ├── sdk_core.py                      # DarkPatternEngine class
+│   └── sdk_providers.py                 # Provider management
+│
+├── api/                               # REST API (Phase 5)
+│   └── main.py                          # FastAPI endpoints
+│
+└── test_*.py                            # Test scripts
+```
+
+## Agent Architecture
+
+### 11 Specialized Agents (Phase 2+)
+
+| Agent | Type | Key Features |
+|-------|------|-------------|
+| **TriageAgent** | `AgentType.TRIAGE` | Fast screening, routing, minimal LLM calls |
+| **InvestigatorAgent** | `AgentType.INVESTIGATOR` | Detailed DOM analysis, 5 pattern categories |
+| **CorrelatorAgent** | `AgentType.CORRELATOR` | Finding combination, risk scoring, interaction flows |
+| **ReporterAgent** | `AgentType.REPORTER` | JSON + plain-text reports, recommendations |
+| **ThreatHunterAgent** | `AgentType.THREAT_HUNTER` | Subtle patterns (low contrast, hidden fields, pre-checked) |
+| **ForensicsAgent** | `AgentType.FORENSICS` | Evidence preservation with hashes/snapshots |
+| **ThreatIntelligenceAgent** | `AgentType.THREAT_INTELLIGENCE` | Known pattern verification vs hypotheses |
+| **ComplianceAgent** | `AgentType.COMPLIANCE` | GDPR/CCPA/General rule mappings |
+| **ResponderAgent** | `AgentType.RESPONDER` | Remediation recommendations + authorization |
+| **AutoResponderAgent** | `AgentType.AUTO_RESPONDER` | Workflow coordination + safety policies |
+| **MitreAnalystAgent** | `AgentType.MITRE_ANALYST` | MITRE ATT&CK technique mappings (optional) |
+
+### Supported Dark Pattern Categories
+
+- **Interface Interference** - Elements that distract or mislead
+- **Obstruction** - Barriers to user goals (confirmshaming, hard to cancel)
+- **Sneaking** - Hidden information, bait-and-switch, hidden costs
+- **Forced Action** - Actions forced without reasonable alternatives
+- **Nagging** - Excessive repeated prompts
+
+### Execution Modes (OrchestrationEngine)
+
+| Mode | Agents | Description |
+|------|--------|-------------|
+| **FAST** | Triage | Quick screening only |
+| **DEEP** | Triage + Investigator + Correlator | Detailed analysis without forensics/compliance |
+| **FULL** | All 11 agents | Complete analysis with evidence, compliance, reporting |
+
+### Core Data Models (Pydantic Schemas)
+
+- `EvidenceRecord` - Structured evidence with confidence/risk scores
+- `DarkPatternCategory` - 5 core categories with subcategories
+- `AgentType` - 11 agent types
+- `AgentStatus` - PENDING, RUNNING, COMPLETED, FAILED, CANCELLED
+- `ReportFormat` - JSON, MARKDOWN, PLAIN_TEXT, HTML
+- `OrchestrationMode` - FAST, DEEP, FULL
+- `DetectionStatus` - PASSED, DETECTED, UNCERTAIN
+
+## Key Features
+
+### 1. LLM Provider Abstraction (Phase 1)
+- OpenAI (GPT-4o, GPT-4o-mini)
+- Anthropic (Claude 3 Opus/Sonnet/Haiku)
+- Google Gemini (1.5 Flash/Pro)
+- Ollama (local models)
+- Provider fallback and mock mode for testing
+- Configurable per-agent with environment-based API keys
+
+### 2. Shared Knowledge Base (Phase 1)
+- Central in-memory/SQLite store
+- Evidence storage, retrieval, update, deletion
+- Taxonomy management with default dark pattern categories
+- Investigation history logging
+- Agent execution tracking
+- Search by pattern, element, confidence
+- Snapshot import/export
+
+### 3. Agent Orchestration (Phase 4)
+- Three execution modes: FAST/DEEP/FULL
+- Sequential agent execution with error handling
+- Configurable timeouts (default 60s)
+- Partial results when agents fail
+- Findin gs deduplication
+- Aggregated confidence and risk metrics
+- Optional agent selection
+
+### 4. Detection Taxonomy (Established Research)
+
+Based on established dark pattern research:
+
+| Category | Code | Description | Severity |
+|----------|------|-------------|----------|
+| Interface Interference | ii | Elements that distract/mislead | medium (0.6) |
+| Obstruction | ob | Barriers to user goals | high (0.7) |
+| Sneaking | sn | Hidden/deceptive info | medium (0.65) |
+| Forced Action | fa | Forced actions without alternatives | high (0.8) |
+| Nagging | na | Excessive repeated prompts | low (0.5) |
+
+### 5. REST API (Phase 5)
+
+Endpoints:
+- `GET /api/v1/health` - Health check
+- `GET /api/v1/agents` - List agents
+- `POST /api/v1/agents/triage` - Triage only
+- `POST /api/v1/agents/investigate` - Investigate only
+- `POST /api/v1/agents/correlate` - Correlate only
+- `POST /api/v1/agents/report` - Report only
+- `POST /api/v1/analyze` - Full analysis per mode
+
+### 6. Python SDK (Phase 5)
+
+```python
+from dpie import DarkPatternEngine
+
+engine = DarkPatternEngine(mode="deep")
+result = engine.analyze({
+    "url": "https://example.com",
+    "elements": [...]
+})
+print(result.findings)
+print(result.aggregated_confidence)
+```
+
+### 7. Detection Taxonomy (Established Research)
+
+Based on established dark pattern research from Baymard Institute, Norman Nielsen Group, and other sources.
+
+### 8. LLM Provider Abstraction
+
+ abstraction layer supporting OpenAI, Anthropic, Google Gemini, and Ollama with:
+- Configurable models per agent
+- Environment-based API keys
+- Model switching without rewriting agent logic
+- Structured output validation
+- Retry and timeout handling
+- Token and cost tracking
+- Model fallback support
+- Mock mode for development and testing
+
+## Project Status
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| **Phase 1** | Core architecture, shared schemas, agent interface, model provider abstraction | ✅ Complete |
+| **Phase 2** | Triage, Investigator, Correlator, Reporter agents | ✅ Complete and Tested |
+| **Phase 3** | Remaining specialized agents (7 agents) | ✅ 11/11 Loaded, Partial Functionality |
+| **Phase 4** | Orchestration engine with 3 modes, timeouts, deduplication | ✅ Complete |
+| **Phase 5** | REST API, Python SDK, CLI | ✅ Implemented |
+| **Phase 6** | Developer dashboard | 📋 Pending |
+| **Phase 7** | Evaluation, benchmarking, testing, documentation, Docker | 📋 Pending |
+
+### Technical Completion: ~85%
+
+The codebase includes:
+- ✅ 11/11 specialized agents
+- ✅ 5 core dark pattern categories
+- ✅ 3 execution modes
+- ✅ LLM provider abstraction (4 providers)
+- ✅ Shared knowledge base
+- ✅ Orchestration engine
+- ✅ REST API with 8 endpoints
+- ✅ Python SDK with full API
+- ✅ Pydantic schemas (all tests pass)
+- ✅ Configuration management
+- ✅ Evidence and knowledge base system
+
+### Files Summary
+
+| Category | Count |
+|----------|-------|
+| Source files (.py) | 35+ |
+| Agent modules | 11 |
+| SDK files | 3 |
+| API endpoints | 8 |
+| Pydantic models | 25+ |
+| Test scripts | 5+ |
+
+### Installation
+
+```bash
+pip install dpie
+# or
+pip install -e dpie  # editable mode for development
+```
+
+## Quick Start
+
+```python
+from dpie import DarkPatternEngine
+
+# Initialize engine
+engine = DarkPatternEngine(mode="deep")
+
+# Analyze a webpage
+result = engine.analyze({
+    "url": "https://example.com",
+    "elements": [
+        {"element_type": "button", "element_text": "Subscribe now!", "element_selector": ".cta"}
+    ]
+})
+
+# Print results
+print("Detected patterns:", [f.detected_pattern for f in result.findings])
+print("Confidence:", result.aggregated_confidence)
+print("Risk:", result.aggregated_risk)
+
+# Or use the SDK directly
+from dpie import set_api_key, DarkPatternEngine
+set_api_key("openai", "sk-...")
+engine = DarkPatternEngine(provider="openai")
+```
+
+## Licensing
+
+DPIE is open source software available under a permissive license for commercial and non-commercial use. See LICENSE for details.
+
+## Contact
+
+For questions, contributions, or support, please refer to the project documentation or contact the maintainers.
+
+---
+*DPIE - DarkPattern Intelligence Engine v0.1.0*
+*An independent software product for dark pattern detection and analysis.*

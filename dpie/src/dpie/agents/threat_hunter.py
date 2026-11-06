@@ -7,13 +7,10 @@ Identifies potentially hidden manipulation techniques.
 
 from __future__ import annotations
 
-import asyncio
 import time
 import logging
-import importlib.util
-import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from dpie.schemas import (
     AgentType,
@@ -131,7 +128,7 @@ class ThreatHunterAgent(BaseAgent):
     ) -> List[EvidenceRecord]:
         """Hunt for subtle threats in a single element."""
         findings: List[EvidenceRecord] = []
-        element_text_lower = element_text.lower()
+        element_text.lower()
 
         # Check for color-based deception (low contrast text for important info)
         if attrs.get("style") and "color" in attrs.get("style", "").lower():

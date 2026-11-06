@@ -70,6 +70,13 @@ class AgentRegistry:
         self._agents.clear()
         self._enabled.clear()
 
+    # Compatibility helpers
+    def get_all_agents(self) -> List[Any]:
+        return self.list_agents()
+
+    def get_enabled_agents(self) -> List[Any]:
+        return [a for a in self.list_agents() if self.is_agent_enabled(a.agent_type)]
+
     # Dict-like compatibility
     def __getitem__(self, item: Union[AgentType, str]) -> Any:
         return self._agents[self._key(item)]

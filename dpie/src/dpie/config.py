@@ -8,8 +8,8 @@ Central configuration for the DPIE framework, including:
 - Paths and directories
 """
 
-from pydantic import BaseModel, Field
-from typing import Literal, Optional, Dict, Any
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal, Optional
 
 
 class Settings(BaseModel):
@@ -53,15 +53,15 @@ class Settings(BaseModel):
         default=100, description="Default rate limit per minute"
     )
     
-    # Dashboard
-    dashboard_enabled: bool = Field(default=True, description="Enable developer dashboard")
-    dashboard_host: str = Field(default="localhost", description="Dashboard host")
-    dashboard_port: int = Field(default=3000, description="Dashboard port")
+    # Knowledge base / runtime
+    kb_max_evidence: int = Field(default=5000, description="Max evidence records kept in memory (0=unbounded)")
+    kb_max_history: int = Field(default=2000, description="Max investigation/execution log entries kept in memory (0=unbounded)")
+    kb_batch_commits: bool = Field(default=True, description="Batch SQLite commits for write bursts")
+    api_enable_dashboard: bool = Field(default=True, description="Serve /dashboard")
+    provider_max_retries: int = Field(default=2, ge=0, le=5, description="Max LLM provider retries for transient errors")
+    provider_retry_backoff_s: float = Field(default=0.5, ge=0.0, le=10.0, description="Base backoff seconds between retries")
     
-    class Config:
-        """Pydantic config."""
-        extra = "forbid"
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
 
 # Global settings instance

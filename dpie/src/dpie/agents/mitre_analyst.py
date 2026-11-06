@@ -6,11 +6,8 @@ Does not force unrelated dark patterns into MITRE ATT&CK categories.
 
 from __future__ import annotations
 
-import asyncio
 import time
 import logging
-import importlib.util
-import os
 from typing import Any, Dict, List, Optional
 
 from dpie.schemas import (
@@ -73,7 +70,7 @@ class MitreAnalystAgent(BaseAgent):
                     source_url=url,
                     element_text=element_text,
                     detected_pattern=pattern,
-                    confidence_score=mitre_match["confidence"],
+                    confidence_score=mitre_match.get("confidence", mitre_match.get("mapping_confidence", confidence)),
                     evidence_text=f"MITRE mapping: {mitre_match['technique_name']} ({mitre_match['technique_id']}) - {mitre_match['description']}",
                     risk_score=mitre_match["risk"],
                     tags=["mitre", mitre_match["technique_id"], pattern],
@@ -82,7 +79,7 @@ class MitreAnalystAgent(BaseAgent):
                         "technique_name": mitre_match["technique_name"],
                         "tactic": mitre_match["tactic"],
                         "description": mitre_match["description"],
-                        "mapping_confidence": mitre_match["mapping_confidence"],
+                        "mapping_confidence": mitre_match.get("mapping_confidence", mitre_match.get("confidence", 0.0)),
                         "is_optional_mapping": True,
                         "reference": mitre_match.get("reference", ""),
                     },
@@ -204,13 +201,15 @@ class MitreAnalystAgent(BaseAgent):
             mapping = mitre_mappings[pattern_lower]
             # Only map if confidence is sufficient (optional mapping)
             if confidence > 0.4:
+                mapping_conf = min(mapping["confidence"], confidence)
                 return {
                     "technique_id": mapping["technique_id"],
                     "technique_name": mapping["technique_name"],
                     "tactic": mapping["tactic"],
                     "description": mapping["description"],
                     "risk": mapping["risk"],
-                    "mapping_confidence": min(mapping["confidence"], confidence),
+                    "confidence": mapping_conf,
+                    "mapping_confidence": mapping_conf,
                     "reference": mapping["reference"],
                 }
 

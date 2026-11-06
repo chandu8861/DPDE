@@ -7,8 +7,8 @@ unstructured chat messages.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, TypedDict, Union
-from pydantic import BaseModel, Field, validator
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from enum import Enum
 
@@ -134,17 +134,32 @@ class EvidenceRecord(BaseModel):
     
     # Verification
     verified: bool = Field(default=False, description="Whether evidence was verified")
+
+    # Backward-compatible dict-like access used by some tests/integrations
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
     verification_notes: Optional[str] = Field(
         default=None, description="Verification notes"
     )
     
-    @validator("confidence_score")
+    @field_validator("confidence_score")
+    @classmethod
     def validate_confidence(cls, v):
         if not 0.0 <= v <= 1.0:
             raise ValueError("Confidence score must be between 0.0 and 1.0")
         return v
-    
-    @validator("risk_score")
+
+    @field_validator("risk_score")
+    @classmethod
     def validate_risk(cls, v):
         if v is not None and not 0.0 <= v <= 1.0:
             raise ValueError("Risk score must be between 0.0 and 1.0")
@@ -271,13 +286,15 @@ class AgentOutput(BaseModel):
         default=False, description="Whether follow-up investigation is needed"
     )
     
-    @validator("overall_confidence")
+    @field_validator("overall_confidence")
+    @classmethod
     def validate_confidence(cls, v):
         if not 0.0 <= v <= 1.0:
             raise ValueError("Overall confidence must be between 0.0 and 1.0")
         return v
-    
-    @validator("overall_risk")
+
+    @field_validator("overall_risk")
+    @classmethod
     def validate_risk(cls, v):
         if v is not None and not 0.0 <= v <= 1.0:
             raise ValueError("Overall risk must be between 0.0 and 1.0")
@@ -305,10 +322,10 @@ class AnalysisRequest(AgentInput):
 
 class AnalysisResponse(BaseModel):
     """Response model for analysis operations."""
-    
+
     request_id: str = Field(description="Unique request identifier")
     status: str = Field(description="Overall analysis status")
-    
+
     # Results
     triage: Optional[AgentOutput] = Field(
         default=None, description="Triage agent output"
@@ -319,10 +336,31 @@ class AnalysisResponse(BaseModel):
     correlator: Optional[AgentOutput] = Field(
         default=None, description="Correlator agent output"
     )
-    reporter: Optional[Dict[str, Any]] = Field(
-        default=None, description="Report generation output"
+    reporter: Optional[AgentOutput] = Field(
+        default=None, description="Reporter output"
     )
-    
+    threat_hunter: Optional[AgentOutput] = Field(
+        default=None, description="Threat Hunter output"
+    )
+    forensics: Optional[AgentOutput] = Field(
+        default=None, description="Forensics output"
+    )
+    compliance: Optional[AgentOutput] = Field(
+        default=None, description="Compliance output"
+    )
+    threat_intelligence: Optional[AgentOutput] = Field(
+        default=None, description="Threat Intelligence output"
+    )
+    responder: Optional[AgentOutput] = Field(
+        default=None, description="Responder output"
+    )
+    auto_responder: Optional[AgentOutput] = Field(
+        default=None, description="Auto Responder output"
+    )
+    mitre_analyst: Optional[AgentOutput] = Field(
+        default=None, description="MITRE Analyst output"
+    )
+
     # Aggregated findings
     all_findings: List[EvidenceRecord] = Field(
         default_factory=list, description="All findings from all agents"
@@ -333,7 +371,7 @@ class AnalysisResponse(BaseModel):
     aggregated_risk: Optional[float] = Field(
         default=None, ge=0.0, le=1.0, description="Aggregated risk score"
     )
-    
+
     # Metadata
     execution_summary: Optional[str] = Field(
         default=None, description="Summary of execution"
@@ -341,7 +379,7 @@ class AnalysisResponse(BaseModel):
     total_execution_time_ms: Optional[int] = Field(
         default=None, description="Total execution time"
     )
-    
+
     # Model info
     models_used: List[str] = Field(
         default_factory=list, description="Models used by agents"
@@ -349,19 +387,21 @@ class AnalysisResponse(BaseModel):
     tokens_total: Optional[int] = Field(
         default=None, description="Total tokens consumed"
     )
-    
+
     # Report
     report: Optional[Dict[str, Any]] = Field(
         default=None, description="Generated report (if include_report=True)"
     )
-    
-    @validator("aggregated_confidence")
+
+    @field_validator("aggregated_confidence")
+    @classmethod
     def validate_confidence(cls, v):
         if not 0.0 <= v <= 1.0:
             raise ValueError("Aggregated confidence must be between 0.0 and 1.0")
         return v
-    
-    @validator("aggregated_risk")
+
+    @field_validator("aggregated_risk")
+    @classmethod
     def validate_risk(cls, v):
         if v is not None and not 0.0 <= v <= 1.0:
             raise ValueError("Aggregated risk must be between 0.0 and 1.0")

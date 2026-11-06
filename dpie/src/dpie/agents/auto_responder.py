@@ -7,12 +7,9 @@ Operates under configurable safety and permission policies.
 
 from __future__ import annotations
 
-import asyncio
 import time
 import logging
-import importlib.util
-import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from dpie.schemas import (
     AgentType,
@@ -56,7 +53,7 @@ class AutoResponderAgent(BaseAgent):
 
         safety_policy = configuration.get("safety_policy", "conservative")
         permission_policy = configuration.get("permission_policy", "manual_approval")
-        auto_escalation = configuration.get("auto_escalation", False)
+        configuration.get("auto_escalation", False)
 
         findings: List[EvidenceRecord] = []
 

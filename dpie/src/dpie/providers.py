@@ -29,14 +29,6 @@ import httpx  # type: ignore
 from pydantic import BaseModel, Field  # Fixed: added imports
 from enum import Enum
 
-from dpie.schemas import (
-    AgentOutput,
-    AgentType,
-    OrchestrationMode,
-    EvidenceRecord,
-    AnalysisRequest,
-    AnalysisResponse,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -260,9 +252,9 @@ class OpenAIProvider(BaseLLMProvider):
                 "json_schema": {
                     "name": "dpie_analysis",
                     "strict": True,
-                    "schema": structured_out.model_json_schema()
-                    if hasattr(structured_out, 'model_json_schema')
-                    else structured_out,
+                    "schema": structured_output.model_json_schema()
+                    if hasattr(structured_output, "model_json_schema")
+                    else structured_output,
                 },
             }
 
@@ -427,9 +419,9 @@ class AnthropicProvider(BaseLLMProvider):
                 {
                     "name": "structured_output",
                     "description": "Structured output schema",
-                    "input_schema": structured_out.model_json_schema()
-                    if hasattr(structured_out, 'model_json_schema')
-                    else structured_out,
+                    "input_schema": structured_output.model_json_schema()
+                    if hasattr(structured_output, "model_json_schema")
+                    else structured_output,
                 }
             ]
             params["tool_choice"] = {"type": "tool", "name": "structured_output"}

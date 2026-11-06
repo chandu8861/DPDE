@@ -5,7 +5,11 @@ Root package that merges src/dpie/ submodules into this namespace.
 import sys
 from pathlib import Path
 
-__version__ = "0.1.0"
+# Prefer src/dpie version when available
+try:
+    from dpie._version import __version__  # type: ignore
+except Exception:
+    __version__ = "0.1.0"
 
 # Extend __path__ so that `import dpie.schemas` etc. resolve from src/dpie/
 _src_dpie = str(Path(__file__).parent / "src" / "dpie")
